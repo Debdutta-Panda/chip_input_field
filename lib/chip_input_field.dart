@@ -1,10 +1,9 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
-class ChipInputController{
-  ChipInputController({this.initialText = ""});
+class TagInputController{
+  TagInputController({this.initialText = ""});
   final String initialText;
   Function()? onRequestFocus;
   Function()? onRemoveFocus;
@@ -56,8 +55,8 @@ class ChipInputController{
     onSetItems?.call(list);
   }
 }
-class ChipInputField extends StatefulWidget {
-  const ChipInputField(
+class TagInputField extends StatefulWidget {
+  const TagInputField(
       {
         this.autocomplete = false,
         this.fieldMinHeight = 60,
@@ -84,6 +83,9 @@ class ChipInputField extends StatefulWidget {
         this.onChange,
         this.controller,
         required this.onTagsAdded,
+        required this.onBeforeTagAdded,
+        required this.onBeforeTagsAdded,
+        this.onFocusChanged,
         Key? key
       }
       ) : super(key: key);
@@ -110,18 +112,21 @@ class ChipInputField extends StatefulWidget {
   final Function(dynamic) onTagDeleted;
   final bool Function(dynamic) onItemWillBeDeleted;
   final Function(String)? onChange;
-  final ChipInputController? controller;
+  final TagInputController? controller;
   final Function(Iterable<dynamic>) onTagsAdded;
+  final bool Function(dynamic) onBeforeTagAdded;
+  final bool Function(Iterable<dynamic>) onBeforeTagsAdded;
+  final Function(bool)? onFocusChanged;
   @override
-  State<ChipInputField> createState() => _ChipInputFieldState();
+  State<TagInputField> createState() => _TagInputFieldState();
 
   static Iterable<Object> _defaultOptionBuilder(TextEditingValue value){
     return Iterable<Object>.empty();
   }
 }
 
-class _ChipInputFieldState extends State<ChipInputField> {
-  var focusNode = FocusNode();
+class _TagInputFieldState extends State<TagInputField> {
+  var _focusNode = FocusNode();
   var controller = TextEditingController();
   List<dynamic> items = [];
   @override
@@ -148,7 +153,7 @@ class _ChipInputFieldState extends State<ChipInputField> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ...items.map(
-                                (e) => widget.tagBuilder?.call(e,onDelete)?? _defaultChipWidget(e)
+                                (e) => widget.tagBuilder?.call(e,onDelete)?? _defaultTagWidget(e)
                         ).toList(),
                         IntrinsicWidth(
                           child: Container(
@@ -176,7 +181,7 @@ class _ChipInputFieldState extends State<ChipInputField> {
 
   }
 
-  Widget _defaultChipWidget(dynamic e){
+  Widget _defaultTagWidget(dynamic e){
     return Container(
       height: 32,
       decoration: BoxDecoration(
@@ -242,7 +247,8 @@ class _ChipInputFieldState extends State<ChipInputField> {
           FocusNode fn, VoidCallback onFieldSubmitted) {
         controller = textEditingController;
         _onTextEditingControllerInitialized();
-        focusNode = fn;
+        _focusNode = fn;
+        _onFocusNodeInitialized();
         return SizedBox(
           height: widget.coreFieldHeight,
           child: Center(
@@ -271,8 +277,9 @@ class _ChipInputFieldState extends State<ChipInputField> {
       onFieldSubmitted: (String value) {
         onFieldSubmitted();
       },
-      inputFormatters: widget.inputFormatters ?? [
+      inputFormatters:  [
         FilteringTextInputFormatter.allow(_regExp),
+        ...(widget.inputFormatters ?? [])
       ],
       onChanged: _onChanged,
     );
@@ -317,7 +324,7 @@ class _ChipInputFieldState extends State<ChipInputField> {
   }
 
   void _onTap(){
-    focusNode.requestFocus();
+    _focusNode.requestFocus();
     controller.selection = TextSelection.collapsed(offset: controller.text.length);
   }
 
@@ -380,10 +387,11 @@ class _ChipInputFieldState extends State<ChipInputField> {
       decoration: InputDecoration.collapsed(
           hintText: widget.hint
       ),
-      focusNode: focusNode,
+      focusNode: _focusNode,
       controller: controller,
-      inputFormatters: widget.inputFormatters?? [
+      inputFormatters:  [
         FilteringTextInputFormatter.allow(_regExp),
+        ...(widget.inputFormatters ?? [])
       ],
       onChanged: _onChanged,
     );
@@ -402,15 +410,19 @@ class _ChipInputFieldState extends State<ChipInputField> {
     if(value.contains(",")){
       var list = value.split(",").where((element) => element.isNotEmpty);
       if(list.isNotEmpty){
-        items.addAll(list);
         _setText("");
         _notifyTextChanged("");
         if(list.length==1){
-          setState(() {
-            widget.onTagAdded(list.first);
-          });
+          if(widget.onBeforeTagAdded(list.first)){
+            items.addAll(list);
+            setState(() {
+              widget.onTagAdded(list.first);
+            });
+          }
         }
         else{
+          if(widget.onBeforeTagsAdded(list))
+          items.addAll(list);
           setState(() {
             widget.onTagsAdded(list);
           });
@@ -448,7 +460,6 @@ class _ChipInputFieldState extends State<ChipInputField> {
   String _getText(){
     return controller.text;
   }
-  late final bool _backspaceWorkaround;
   @override
   void initState() {
     super.initState();
@@ -467,10 +478,10 @@ class _ChipInputFieldState extends State<ChipInputField> {
         _setText(value);
       }
       ..onRemoveFocus = (){
-        focusNode.unfocus();
+        _focusNode.unfocus();
       }
       ..onRequestFocus = (){
-        focusNode.requestFocus();
+        _focusNode.requestFocus();
       }
       ..onAddItem = (item){
         setState(() {
@@ -509,7 +520,34 @@ class _ChipInputFieldState extends State<ChipInputField> {
     ;
   }
 
+
+  var _controllerInitializedAffected = false;
+  var _focusNodeInitializedAffected = false;
   void _onTextEditingControllerInitialized() {
+    if(_controllerInitializedAffected){
+      return;
+    }
+    _controllerInitializedAffected = true;
     _setText(widget.controller?.initialText??"");
+  }
+
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusNodeInitialized() {
+    if(_focusNodeInitializedAffected){
+      return;
+    }
+    _focusNodeInitializedAffected = true;
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  _onFocusChanged(){
+    widget.onFocusChanged?.call(_focusNode.hasFocus);
   }
 }

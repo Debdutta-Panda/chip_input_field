@@ -35,6 +35,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   var controller = ChipInputController();
   int _counter = 0;
+  Color color = Colors.grey;
 
   void _incrementCounter() {
     setState(() {
@@ -49,20 +50,41 @@ class _MyHomePageState extends State<MyHomePage> {
         body: SizedBox(
           width: double.maxFinite,
           child: Padding(
-            padding: const EdgeInsets.only(right: 150),
+            padding: const EdgeInsets.all(24),
             child: Column(
               children: [
                 Container(
                   width: double.maxFinite,
                   child: ChipInputField(
+                    onFocusChanged: (hasFocus){
+                      setState(() {
+                        if(hasFocus){
+                          color = Colors.red;
+                        }
+                        else{
+                          color = Colors.grey;
+                        }
+                      });
+                    },
+                    /*fieldDecoration: BoxDecoration(
+                        border: Border.all(
+                          width: 1,
+                          color: color
+                        ),
+                      borderRadius: BorderRadius.circular(10)
+                    ),*/
+                    onBeforeTagsAdded: (values){
+                      return true;
+                    },
+                    onBeforeTagAdded: (item){
+                      return true;
+                    },
                     controller: controller,
                     autocomplete: true,
                     optionBuilder: (query){
                       if(query.text.isEmpty){
                         return [];
                       }
-                      print("1111111");
-                      print(query.text);
                       return [
                         query.text+"1",
                         query.text+"2",
@@ -72,7 +94,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                     fieldMinHeight: 60,
                     fieldPadding: EdgeInsets.all(8),
-                    tagBuilder: (data,fnDelete)=>Row(
+                    /*tagBuilder: (data,fnDelete)=>Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(data),
@@ -83,30 +105,31 @@ class _MyHomePageState extends State<MyHomePage> {
                             icon: Icon(Icons.close
                             ))
                       ],
-                    ),
-                    optionViewBuilder: (highlighted,index,option)=>Text(
+                    ),*/
+                    /*optionViewBuilder: (highlighted,index,option)=>Text(
                         option.toString(),
                       style: TextStyle(
                         color: highlighted ? Colors.red : Colors.black
                       ),
-                    ),
-                    optionListMaterialBuilder: (child,elevation)=>Material(
+                    ),*/
+                    /*optionListMaterialBuilder: (child,elevation)=>Material(
                       color: Colors.green,
                       elevation: elevation,
                       child: child,
-                    ),
+                    ),*/
                     onItemWillBeDeleted: (item)=>true,
                     onTagAdded: (item){
-                      print("added=$item");
+
                     },onTagDeleted: (item){
-                      print("deleted=$item");
+
                     },
                     onTagsAdded: (list){
-                      print("addeds=$list");
+
                     },
                     onChange: (value){
-                      //print(value);
+
                     },
+                    hint: "Your tags fd fdf dfdf dfd fdf dfd fdf dfd fdf df",
                 ),
                 ),
                 ElevatedButton(
