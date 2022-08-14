@@ -29,6 +29,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  var controller = ChipInputController();
   int _counter = 0;
 
   void _incrementCounter() {
@@ -44,42 +45,111 @@ class _MyHomePageState extends State<MyHomePage> {
         width: double.maxFinite,
         child: Padding(
           padding: const EdgeInsets.only(right: 150),
-          child: Container(
-            child: ChipInputField(
-              autocomplete: true,
-              fieldMinHeight: 60,
-              fieldPadding: EdgeInsets.all(8),
-              tagBuilder: (data,fnDelete)=>Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(data),
-                  IconButton(
-                      onPressed: (){
-                        fnDelete(data);
-                      },
-                      icon: Icon(Icons.close
-                      ))
-                ],
+          child: Column(
+            children: [
+              Container(
+                width: double.maxFinite,
+                child: ChipInputField(
+                  controller: controller,
+                  autocomplete: true,
+                  fieldMinHeight: 60,
+                  fieldPadding: EdgeInsets.all(8),
+                  tagBuilder: (data,fnDelete)=>Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(data),
+                      IconButton(
+                          onPressed: (){
+                            fnDelete(data);
+                          },
+                          icon: Icon(Icons.close
+                          ))
+                    ],
+                  ),
+                  optionViewBuilder: (highlighted,index)=>Text(
+                      index.toString(),
+                    style: TextStyle(
+                      color: highlighted ? Colors.red : Colors.black
+                    ),
+                  ),
+                  optionListMaterialBuilder: (child,elevation)=>Material(
+                    color: Colors.green,
+                    elevation: elevation,
+                    child: child,
+                  ),
+                  onItemWillBeDeleted: (item)=>true,
+                  onTagAdded: (item){
+
+                  },onTagDeleted: (item){
+
+                  },
               ),
-              optionViewBuilder: (highlighted,index)=>Text(
-                  index.toString(),
-                style: TextStyle(
-                  color: highlighted ? Colors.red : Colors.black
-                ),
               ),
-              optionListMaterialBuilder: (child,elevation)=>Material(
-                color: Colors.green,
-                elevation: elevation,
-                child: child,
+              ElevatedButton(
+                  onPressed: (){
+                    controller.addItem("123");
+                  },
+                  child: Text("Focus")
               )
-          ),
+            ],
           ),
         ),
       ),
     );
   }
 }
+////////////////////////////////////////////
+class ChipInputController{
+  Function()? onRequestFocus;
+  Function()? onRemoveFocus;
+  Function(String)? onSetText;
+  String Function()? onGetText;
+  List<dynamic> Function()? onGetItems;
+  Function(List<dynamic>)? onSetItems;
 
+  Function(dynamic)? onAddItem;
+  Function(dynamic)? onDeleteItem;
+  Function(dynamic,int)? onInsertItem;
+  Function(dynamic,dynamic)? onInsertAfter;
+  Function(int)? onRemoveAt;
+
+  void removeAt(int index){
+    onRemoveAt?.call(index);
+  }
+
+  void addItem(dynamic item){
+    onAddItem?.call(item);
+  }
+
+  void deleteItem(dynamic item){
+    onDeleteItem?.call(item);
+  }
+  void insertItem(dynamic item, int index){
+    onInsertItem?.call(item,index);
+  }
+  void insertAfter(dynamic item, dynamic after){
+    onInsertAfter?.call(item,after);
+  }
+
+  void requestFocus(){
+    onRequestFocus?.call();
+  }
+  void removeFocus(){
+    onRemoveFocus?.call();
+  }
+  set text(String value){
+    onSetText?.call(value);
+  }
+  String get text{
+    return onGetText?.call()??"";
+  }
+  List<dynamic> get items{
+    return onGetItems?.call()??[];
+  }
+  set items(List<dynamic> list){
+    onSetItems?.call(list);
+  }
+}
 class ChipInputField extends StatefulWidget {
   const ChipInputField(
       {
@@ -104,6 +174,9 @@ class ChipInputField extends StatefulWidget {
         this.inputFormatters,
         required this.onTagAdded,
         required this.onTagDeleted,
+        required this.onItemWillBeDeleted,
+        this.onChange,
+        this.controller,
         Key? key
       }
   ) : super(key: key);
@@ -128,6 +201,9 @@ class ChipInputField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final Function(dynamic) onTagAdded;
   final Function(dynamic) onTagDeleted;
+  final bool Function(dynamic) onItemWillBeDeleted;
+  final Function(String)? onChange;
+  final ChipInputController? controller;
   @override
   State<ChipInputField> createState() => _ChipInputFieldState();
 
@@ -135,15 +211,6 @@ class ChipInputField extends StatefulWidget {
     return Iterable<Object>.empty();
   }
 }
-
-/*(TextEditingValue textEditingValue) {
-if (textEditingValue.text == '') {
-return const Iterable<String>.empty();
-}
-return _kOptions.where((String option) {
-return option.contains(textEditingValue.text.toLowerCase());
-});
-}*/
 
 class _ChipInputFieldState extends State<ChipInputField> {
   var focusNode = FocusNode();
@@ -297,7 +364,8 @@ class _ChipInputFieldState extends State<ChipInputField> {
         },
         inputFormatters: widget.inputFormatters ?? [
           FilteringTextInputFormatter.allow(RegExp(r"[^,^\s]+[\s]?")),
-        ]
+        ],
+      onChanged: (value)=>widget.onChange?.call(value),
     );
   }
 
@@ -355,7 +423,7 @@ class _ChipInputFieldState extends State<ChipInputField> {
     else if(event.runtimeType == RawKeyDownEvent){
       var key = event.logicalKey.keyId;
       switch(key){
-        case 4294967304: onBackPress();break;
+        case 4294967304: onBackSpace();break;
         default: print(key);
       }
     }
@@ -374,13 +442,16 @@ class _ChipInputFieldState extends State<ChipInputField> {
     onTap();
   }
 
-  void onBackPress() {
+  void onBackSpace() {
     var selection = controller.selection;
     var start = selection.start;
     var end = selection.end;
     if(start<1 && end<1 && items.isNotEmpty){
+      var last = items.last;
+      if(!widget.onItemWillBeDeleted(last)){
+        return;
+      }
       setState(() {
-        var last = items.last;
         items.removeLast();
         widget.onTagDeleted(last);
       });
@@ -388,6 +459,9 @@ class _ChipInputFieldState extends State<ChipInputField> {
   }
 
   void onDelete(dynamic e) {
+    if(!widget.onItemWillBeDeleted(e)){
+      return;
+    }
     setState(() {
       items.remove(e);
       widget.onTagDeleted(e);
@@ -403,7 +477,8 @@ class _ChipInputFieldState extends State<ChipInputField> {
         controller: controller,
         inputFormatters: widget.inputFormatters?? [
           FilteringTextInputFormatter.allow(RegExp(r"[^,^\s]+[\s]?")),
-        ]
+        ],
+      onChanged: (value)=>widget.onChange?.call(value),
     );
   }
 
@@ -415,6 +490,66 @@ class _ChipInputFieldState extends State<ChipInputField> {
 
   BoxConstraints _defaultOptionListConstraints() {
     return BoxConstraints(maxHeight: 200,maxWidth: 200);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?..onSetItems = (items){
+      setState(() {
+        this.items = items;
+      });
+    }
+    ..onGetItems = (){
+      return this.items;
+    }
+    ..onGetText = (){
+      return controller.text;
+    }
+    ..onSetText = (value){
+      controller.text = value;
+    }
+    ..onRemoveFocus = (){
+      focusNode.unfocus();
+    }
+    ..onRequestFocus = (){
+      focusNode.requestFocus();
+    }
+    ..onAddItem = (item){
+      setState(() {
+        items.add(item);
+      });
+    }
+    ..onDeleteItem = (item){
+      if(items.contains(item)){
+        setState(() {
+          items.remove(item);
+        });
+      }
+    }
+    ..onInsertItem = (item,index){
+      if(items.length>index-1){
+        setState(() {
+          items.insert(index, item);
+        });
+      }
+    }
+    ..onInsertAfter = (item,after){
+      var index = items.indexOf(item);
+      if(index > -1){
+        setState(() {
+          items.insert(index+1, item);
+        });
+      }
+    }
+    ..onRemoveAt = (index){
+      if(items.length>index&&index > -1){
+        setState(() {
+          items.removeAt(index);
+        });
+      }
+    }
+    ;
   }
 }
 
